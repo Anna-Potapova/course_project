@@ -1,0 +1,157 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+from pathlib import Path
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+import pandas as pd
+from tensorflow.keras.models import load_model
+from sklearn.model_selection import train_test_split
+from collections import Counter
+from tensorflow.keras.preprocessing import image
+
+data_folder = Path("/content/drive/My Drive/train/")
+df = pd.read_csv("/content/drive/My Drive/train.csv", sep=',')
+df.head()
+
+df_train, df_val = train_test_split(df, test_size=0.2)
+
+image_gen = ImageDataGenerator(preprocessing_function=preprocess_input)
+
+BATCH_SIZE = 128
+IMAGE_SHAPE = 224
+
+train_generator_emotion = image_gen.flow_from_dataframe(
+    dataframe=df_train,
+    directory=str(data_folder),
+    x_col="image_path",
+    y_col="emotion",
+    target_size=(IMAGE_SHAPE, IMAGE_SHAPE),#batch_size, image_size указаны ниже
+    class_mode="sparse",
+    batch_size=BATCH_SIZE,
+    shuffle=True,#train_generator должен перемешивать данные, а val_generator -- не должен
+)
+
+val_generator_emotion = image_gen.flow_from_dataframe(
+    dataframe=df_val,
+    directory=str(data_folder),
+    x_col="image_path",
+    y_col="emotion",
+    target_size=(IMAGE_SHAPE, IMAGE_SHAPE),
+    class_mode="sparse",
+    batch_size=BATCH_SIZE,
+    shuffle=False,#train_generator должен перемешивать данные, а val_generator -- не должен
+)
+
+IMG_SIZE = (224, 224, 3)
+# базовая модель -- MobileNet
+base_model = tf.keras.applications.MobileNetV2(input_shape=IMG_SIZE,
+                                               include_top=False,
+                                               weights='imagenet')
+                                               
+base_model.trainable = True
+print("Количество слоев в базовой модели: ", len(base_model.layers))
+
+path = Path("drive/MyDrive/model_emotion")
+path.mkdir(exist_ok=True)
+cpt_filename = "checkpoint_best.h5"
+cpt_path =str(path / cpt_filename)
+
+checkpoint = tf.keras.callbacks.ModelCheckpoint(cpt_path, monitor='val_accuracy', verbose=1, save_best_only=True, mode='max')
+
+cpt_path
+
+model_1 = tf.keras.Sequential([
+  base_model,
+  tf.keras.layers.Dense(512, input_shape=IMG_SIZE, activation='relu'),
+  tf.keras.layers.Dense(256, activation='relu'),
+  tf.keras.layers.Dense(128, activation='relu'),
+  tf.keras.layers.Dense(64, activation='relu'),
+  tf.keras.layers.Dense(32, activation='relu'),
+  tf.keras.layers.Flatten(),
+  tf.keras.layers.Dense(9, activation='softmax')
+])
+
+fine_tune_at = 160
+# все слои до -- заморозим
+for layer in base_model.layers[:fine_tune_at]:
+  layer.trainable =  False
+
+model_1.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+model_1.summary()
+
+EPOCHS = 10
+history_1 = model_1.fit_generator(
+    train_generator_emotion,
+    steps_per_epoch=25,
+    epochs=EPOCHS,
+    validation_data=val_generator_emotion,
+    callbacks=[checkpoint])
+    
+df_test = pd.read_csv("/content/drive/My Drive/sample_submission.csv", sep=',')
+df_test.head()
+
+test_data_folder = Path("/content/drive/My Drive/test_kaggle/test_kaggle/")
+
+test_generator_emotion = image_gen.flow_from_dataframe(
+    dataframe=df_test,
+    directory=str(test_data_folder),
+    x_col="image_path",
+    y_col="emotion",
+    target_size=(IMAGE_SHAPE, IMAGE_SHAPE),
+    class_mode="sparse",
+    batch_size=BATCH_SIZE,
+    shuffle=False,
+)
+
+model_emotion_1 = load_model("drive/My Drive/model_emotion/checkpoint_best.h5")
+loss, acc = model_emotion_1.evaluate(val_generator_emotion)
+if acc < 0.29880:
+    print("Please, try harder!")
+else:
+    if acc >= 0.4:
+        print("Well done!")
+    else:
+        print("Very good! Can you improve accuracy?")
+        
+sample_validation_images, sample_validation_labels = next(val_generator_emotion)
+
+predicted = model_1.predict_classes(sample_validation_images).flatten()
+
+def show_emotions(images, labels, predicted_labels=None):
+    names = {0: 'anger', 1: 'contempt', 2: 'disgust', 3: 'fear', 4: 'happy', 5: 'neutral', 6: 'sad', 7: 'surprise', 8: 'uncertain'}
+    plt.figure(figsize=(10,10))
+    for i in range(16):
+        plt.subplot(4,4, i+1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+        plt.imshow((images[i] + 1)/2., cmap=plt.cm.gray)
+        if predicted_labels is not None:
+            title_obj = plt.title(f"Real: {names[labels[i]]}. Pred: {names[predicted_labels[i]]}")
+            if labels[i] != predicted_labels[i]:
+                plt.setp(title_obj, color='r')
+        else:
+            plt.title(f"Real label: {names[labels[i]]}")
+
+show_emotions(sample_validation_images, sample_validation_labels, predicted)
+
+classes_mapping = {0: 'anger', 1: 'contempt', 2: 'disgust', 3: 'fear', 4: 'happy', 5: 'neutral', 6: 'sad', 7: 'surprise', 8: 'uncertain'}
+
+classes_1 = []
+for i in predicted_classes_1:
+  classes_1.append(classes_mapping[i])
+
+
+test_images = df_test['image_path'].to_list()
+
+def write_to_submission_file(predictions, test_images, out_file='Submission.csv', columns=['image_path', 'emotion']):
+    predicted_df = pd.DataFrame(list(zip(test_images, predictions)), columns=columns)
+    predicted_df.to_csv(out_file, index=False)
+    
+write_to_submission_file(classes_1, test_images, out_file='Submission_1.csv', columns=['image_path', 'emotion'])
+
+# Private Score 0.30320
+# Public Score 0.30240
