@@ -6,3 +6,5 @@ You need to save the following files on your Google disc:
 "test_kaggle" folder (https://drive.google.com/file/d/1bGHeWeWYXj5biL9s-qTc9gyv91WNAbWE/view?usp=sharing)
 sample_submission.csv
 train.csv
+
+Instructions for notebook "Диплом_OpenCV" are inside the notebook.
