@@ -26,7 +26,7 @@ train.csv
 
 In file "Система_по_распознаванию_эмоций_Дипломный_проект_ipynb_" there are 8 parts.
 
-Each n part of 1-7 is connected with 2 files attached to main branch:
+Each n part of 1, 4, 5, 6 and 7 is connected with 2 files attached to main branch:
 
 1. Submission_n.csv (predicted classes in csv format) for kaggle upload,
 2. Submission_n.png(jpeg) screenshot of results on kaggle.
